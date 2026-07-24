@@ -28,6 +28,7 @@ contract LotteryAuction is VRFConsumerBaseV2Plus, AutomationCompatibleInterface 
         mapping(address => uint256) playerToBet;
         uint256 lastTimestamp;
         uint32 playersCount;
+        uint256 interval;
     }
 
     // Chainlink
@@ -35,10 +36,9 @@ contract LotteryAuction is VRFConsumerBaseV2Plus, AutomationCompatibleInterface 
     uint32 private constant NUM_WORDS = 1;
     uint256 private immutable i_subscriptionId;
     bytes32 private immutable i_gasLane;
-    uint32 private immutable i_callbackGasLimit;
+    uint32 private immutable i_gasLimit;
 
     // Settings
-    uint256 private immutable i_interval;
     uint256 private immutable i_baseFee;
 
     // Lottery data
@@ -56,16 +56,14 @@ contract LotteryAuction is VRFConsumerBaseV2Plus, AutomationCompatibleInterface 
     constructor(
         uint256 subscriptionId,
         bytes32 gasLane,
-        uint256 interval,
         uint256 baseFee,
-        uint32 callbackGasLimit,
+        uint32 gasLimit,
         address vrfCoordinatorV2
     ) VRFConsumerBaseV2Plus(vrfCoordinatorV2) {
-        i_gasLane = gasLane;
-        i_interval = interval;
         i_subscriptionId = subscriptionId;
+        i_gasLane = gasLane;
         i_baseFee = baseFee;
-        i_callbackGasLimit = callbackGasLimit;
+        i_gasLimit = gasLimit;
     }
 
     modifier checkBaseFee() {
@@ -82,7 +80,7 @@ contract LotteryAuction is VRFConsumerBaseV2Plus, AutomationCompatibleInterface 
         _;
     }
 
-    function createRoom() external payable checkBaseFee {
+    function createRoom(uint256 interval) external payable checkBaseFee {
         uint256 roomId = s_lastId;
         LotteryRoom storage room = s_rooms[roomId];
 
@@ -90,6 +88,7 @@ contract LotteryAuction is VRFConsumerBaseV2Plus, AutomationCompatibleInterface 
         room.playerToBet[msg.sender] = msg.value;
         room.lastTimestamp = block.timestamp;
         room.playersCount = 1;
+        room.interval = interval;
 
         s_roomsIds.push(roomId);
         s_roomIndex[roomId] = s_roomsIds.length;
