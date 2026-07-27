@@ -29,8 +29,10 @@ contract LotteryRoom {
         uint256 betsAmount;
     }
 
+    // Settings
     uint256 private immutable i_baseFee;
 
+    // Rooms data
     mapping(uint256 roomId => Room room) internal s_rooms;
     uint256[] internal s_roomsIds;
     mapping(uint256 roomId => uint256 roomIndex) internal s_roomIndex;
@@ -65,13 +67,12 @@ contract LotteryRoom {
         Room storage room = s_rooms[roomId];
 
         room.state = LotteryState.AWAITING;
-        room.playerToBet[msg.sender] = msg.value;
-        room.playersAddr.push(payable(msg.sender));
-        room.playerIndex[msg.sender] = room.playersAddr.length;
         room.lastTimestamp = block.timestamp;
         room.playersCount = 1;
         room.interval = interval;
         room.betsAmount += i_baseFee;
+
+        _addPlayer(room, msg.sender, msg.value);
 
         s_roomsIds.push(roomId);
         s_roomIndex[roomId] = s_roomsIds.length;
@@ -91,9 +92,7 @@ contract LotteryRoom {
             revert LotteryRoom__CantJoinNow();
         }
 
-        room.playerToBet[msg.sender] = i_baseFee;
-        room.playersAddr.push(payable(msg.sender));
-        room.playerIndex[msg.sender] = room.playersAddr.length;
+        _addPlayer(room, msg.sender, msg.value);
 
         uint256 playersCount = room.playersCount + 1;
         if (playersCount == 2) {
@@ -123,6 +122,7 @@ contract LotteryRoom {
         delete room.playerToBet[msg.sender];
         _removePlayer(room, msg.sender);
         room.betsAmount -= refund;
+
         emit RoomLeft(roomId, msg.sender);
 
         room.playersCount = uint32(room.playersAddr.length);
@@ -153,6 +153,12 @@ contract LotteryRoom {
         s_roomsIds.pop();
         delete s_roomIndex[roomId];
         delete s_rooms[roomId];
+    }
+
+    function _addPlayer(Room storage room, address player, uint256 value) private {
+        room.playerToBet[player] = value;
+        room.playersAddr.push(payable(player));
+        room.playerIndex[player] = room.playersAddr.length;
     }
 
     function _removePlayer(Room storage room, address player) private {
