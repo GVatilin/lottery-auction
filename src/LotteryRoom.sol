@@ -2,13 +2,16 @@
 pragma solidity ^0.8.35;
 
 contract LotteryRoom {
-    error LotteryRoom__IncorrectBaseFee();
+    error LotteryRoom__IncorrectBaseFee(uint256 baseFee, uint256 userValue);
     error LotteryRoom__CantLeaveRoomNow();
-    error LotteryRoom__RoomNotFound();
+    error LotteryRoom__RoomNotFound(uint256 roomId);
     error LotteryRoom__TransferFailed();
     error LotteryRoom__NotRoomMember();
     error LotteryRoom__CantJoinTwice();
-    error LotteryRoom__CantJoinNow();
+    error LotteryRoom__RoomMustBeOpen(LotteryState state);
+    error LotteryRoom__MaxPlayersInRoom(uint256 playersCount);
+    error LotteryRoom__InvalidMaxPlayers(uint256 maxPlayers);
+    error LotteryRoom__InvalidBaseFee(uint256 baseFee);
 
     enum LotteryState {
         AWAITING,
@@ -31,6 +34,7 @@ contract LotteryRoom {
 
     // Settings
     uint256 private immutable i_baseFee;
+    uint256 private immutable i_maxPlayers;
 
     // Rooms data
     mapping(uint256 roomId => Room room) internal s_rooms;
@@ -44,20 +48,27 @@ contract LotteryRoom {
     event RoomWentToAwaiting(uint256 indexed roomId);
     event RoomDeleted(uint256 indexed roomId);
 
-    constructor(uint256 baseFee) {
+    constructor(uint256 baseFee, uint256 maxPlayers) {
+        if (baseFee == 0) {
+            revert LotteryRoom__InvalidBaseFee(baseFee);
+        }
+        if (maxPlayers < 2 || maxPlayers > 100) {
+            revert LotteryRoom__InvalidMaxPlayers(maxPlayers);
+        }
         i_baseFee = baseFee;
+        i_maxPlayers = maxPlayers;
     }
 
     modifier checkBaseFee() {
         if (msg.value != i_baseFee) {
-            revert LotteryRoom__IncorrectBaseFee();
+            revert LotteryRoom__IncorrectBaseFee(i_baseFee, msg.value);
         }
         _;
     }
 
     modifier checkRoomExists(uint256 roomId) {
         if (s_roomIndex[roomId] == 0) {
-            revert LotteryRoom__RoomNotFound();
+            revert LotteryRoom__RoomNotFound(roomId);
         }
         _;
     }
@@ -89,7 +100,11 @@ contract LotteryRoom {
         }
 
         if (room.state != LotteryState.OPEN && room.state != LotteryState.AWAITING) {
-            revert LotteryRoom__CantJoinNow();
+            revert LotteryRoom__RoomMustBeOpen(room.state);
+        }
+
+        if (room.playersCount >= i_maxPlayers) {
+            revert LotteryRoom__MaxPlayersInRoom(room.playersCount);
         }
 
         _addPlayer(room, msg.sender, msg.value);
@@ -125,7 +140,7 @@ contract LotteryRoom {
 
         emit RoomLeft(roomId, msg.sender);
 
-        room.playersCount = uint32(room.playersAddr.length);
+        room.playersCount = room.playersAddr.length;
         if (room.playersCount == 1) {
             room.state = LotteryState.AWAITING;
             emit RoomWentToAwaiting(roomId);

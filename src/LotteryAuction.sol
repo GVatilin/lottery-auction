@@ -12,6 +12,9 @@ contract LotteryAuction is VRFConsumerBaseV2Plus, AutomationCompatibleInterface,
     error LotteryAuction__TransferFailed();
     error LotteryAuction__UpkeepNotNeeded();
     error LotteryAuction__AuctionUnavailable();
+    error LotteryAuction__ZeroBalance();
+    error LotteryAuction__AuctionIsClosed();
+    error LotteryAuction__CantBetZero();
 
     // Chainlink Settings
     uint16 private constant REQUEST_CONFIRMATIONS = 3;
@@ -22,35 +25,23 @@ contract LotteryAuction is VRFConsumerBaseV2Plus, AutomationCompatibleInterface,
 
     // Lottery data
     mapping(uint256 requestId => uint256 roomId) private s_requestToRoom;
+    mapping(address player => uint256 balance) private s_playerToBalance;
 
     event LotteryAuctionEnded(uint256 indexed roomId);
     event AuctionFunded(uint256 indexed roomId, address indexed addr);
+    event WinningsWithdrawn(address indexed player, uint256 amount);
 
-    constructor(uint256 subscriptionId, bytes32 gasLane, uint256 baseFee, uint32 gasLimit, address vrfCoordinatorV2)
-        VRFConsumerBaseV2Plus(vrfCoordinatorV2)
-        LotteryRoom(baseFee)
-    {
+    constructor(
+        uint256 subscriptionId,
+        bytes32 gasLane,
+        uint256 baseFee,
+        uint32 gasLimit,
+        address vrfCoordinatorV2,
+        uint256 maxPlayers
+    ) VRFConsumerBaseV2Plus(vrfCoordinatorV2) LotteryRoom(baseFee, maxPlayers) {
         i_subscriptionId = subscriptionId;
         i_gasLane = gasLane;
         i_gasLimit = gasLimit;
-    }
-
-    function fundAuction(uint256 roomId) external payable checkRoomExists(roomId) {
-        Room storage room = s_rooms[roomId];
-
-        if (room.playerToBet[msg.sender] == 0) {
-            revert LotteryRoom__NotRoomMember();
-        }
-
-        LotteryState state = room.state;
-        if (state != LotteryState.AUCTION) {
-            revert LotteryAuction__AuctionUnavailable();
-        }
-
-        room.playerToBet[msg.sender] += msg.value;
-        room.betsAmount += msg.value;
-
-        emit AuctionFunded(roomId, msg.sender);
     }
 
     function checkUpkeep(
@@ -104,6 +95,47 @@ contract LotteryAuction is VRFConsumerBaseV2Plus, AutomationCompatibleInterface,
         s_requestToRoom[requestId] = roomId;
     }
 
+    function fundAuction(uint256 roomId) external payable checkRoomExists(roomId) {
+        Room storage room = s_rooms[roomId];
+
+        if (room.playerToBet[msg.sender] == 0) {
+            revert LotteryRoom__NotRoomMember();
+        }
+
+        if (room.state != LotteryState.AUCTION) {
+            revert LotteryAuction__AuctionUnavailable();
+        }
+
+        if (_isTimePassed(room)) {
+            revert LotteryAuction__AuctionIsClosed();
+        }
+
+        if (msg.value == 0) {
+            revert LotteryAuction__CantBetZero();
+        }
+
+        room.playerToBet[msg.sender] += msg.value;
+        room.betsAmount += msg.value;
+
+        emit AuctionFunded(roomId, msg.sender);
+    }
+
+    function withdraw() external {
+        uint256 balance = s_playerToBalance[msg.sender];
+        if (balance == 0) {
+            revert LotteryAuction__ZeroBalance();
+        }
+
+        delete s_playerToBalance[msg.sender];
+
+        (bool success,) = msg.sender.call{value: balance}("");
+        if (!success) {
+            revert LotteryAuction__TransferFailed();
+        }
+
+        emit WinningsWithdrawn(msg.sender, balance);
+    }
+
     function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal override {
         uint256 roomId = s_requestToRoom[requestId];
         delete s_requestToRoom[requestId];
@@ -120,17 +152,14 @@ contract LotteryAuction is VRFConsumerBaseV2Plus, AutomationCompatibleInterface,
             _deleteRoom(roomId);
             emit LotteryAuctionEnded(roomId);
 
-            (bool success,) = winner.call{value: prize}("");
-            if (!success) {
-                revert LotteryAuction__TransferFailed();
-            }
+            s_playerToBalance[winner] += prize;
         }
     }
 
     function _isUpkeepNeeded(Room storage room) private view returns (bool) {
         LotteryState state = room.state;
         bool isOpen = (state == LotteryState.OPEN) || (state == LotteryState.AUCTION);
-        bool timePassed = ((block.timestamp - room.lastTimestamp) > room.interval);
+        bool timePassed = _isTimePassed(room);
 
         return isOpen && timePassed;
     }
@@ -184,5 +213,13 @@ contract LotteryAuction is VRFConsumerBaseV2Plus, AutomationCompatibleInterface,
         }
 
         return winner;
+    }
+
+    function _isTimePassed(Room storage room) private view returns (bool) {
+        return block.timestamp >= room.interval + room.lastTimestamp;
+    }
+
+    function getBalance() external view returns (uint256) {
+        return s_playerToBalance[msg.sender];
     }
 }

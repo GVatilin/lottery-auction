@@ -27,7 +27,8 @@ contract DeployScript is Script {
             networkConfig.gasLane,
             networkConfig.baseFee,
             networkConfig.gasLimit,
-            networkConfig.vrfCoordinatorV2_5
+            networkConfig.vrfCoordinatorV2_5,
+            networkConfig.maxPlayers
         );
 
         VRFCoordinatorV2_5Mock(networkConfig.vrfCoordinatorV2_5).addConsumer(subId, address(lotteryAuction));
