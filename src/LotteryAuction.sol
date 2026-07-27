@@ -1,164 +1,188 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.36;
+pragma solidity ^0.8.35;
 
 import {VRFConsumerBaseV2Plus} from "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
 import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 import {
     AutomationCompatibleInterface
-} from "@chainlink/contracts/src/v0.8/interfaces/AutomationCompatibleInterface.sol";
+} from "@chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
+import {LotteryRoom} from "./LotteryRoom.sol";
 
-contract LotteryAuction is VRFConsumerBaseV2Plus, AutomationCompatibleInterface {
-    error LotteryAuction__IncorrectBaseFee();
-    error LotteryAuction__CantLeaveRoomNow();
+contract LotteryAuction is VRFConsumerBaseV2Plus, AutomationCompatibleInterface, LotteryRoom {
     error LotteryAuction__TransferFailed();
-    error LotteryAuction__RoomNotFound();
-    error LotteryAuction__NotRoomMember();
-    error LotteryAuction__CantJoinTwice();
-    error LotteryAuction__CantJoinNow();
+    error LotteryAuction__UpkeepNotNeeded();
+    error LotteryAuction__AuctionUnavailable();
 
-    enum LotteryState {
-        AWAITING,
-        OPEN,
-        AUCTION,
-        CALCULATING
-    }
-
-    struct LotteryRoom {
-        LotteryState state;
-        mapping(address => uint256) playerToBet;
-        uint256 lastTimestamp;
-        uint32 playersCount;
-        uint256 interval;
-    }
-
-    // Chainlink
+    // Chainlink Settings
     uint16 private constant REQUEST_CONFIRMATIONS = 3;
     uint32 private constant NUM_WORDS = 1;
     uint256 private immutable i_subscriptionId;
     bytes32 private immutable i_gasLane;
     uint32 private immutable i_gasLimit;
 
-    // Settings
-    uint256 private immutable i_baseFee;
-
     // Lottery data
-    mapping(uint256 => LotteryRoom) private s_rooms;
-    uint256[] private s_roomsIds;
-    mapping(uint256 => uint256) private s_roomIndex;
-    uint256 private s_lastId;
+    mapping(uint256 requestId => uint256 roomId) private s_requestToRoom;
 
-    event RoomCreated(uint256 indexed roomId, address indexed addr);
-    event RoomEntered(uint256 indexed roomId, address indexed addr);
-    event RoomLeft(uint256 indexed roomId, address indexed addr);
-    event RoomWentToAwaiting(uint256 indexed roomId);
-    event RoomDeleted(uint256 indexed roomId);
+    event LotteryAuctionEnded(uint256 indexed roomId);
+    event AuctionFunded(uint256 indexed roomId, address indexed addr);
 
-    constructor(
-        uint256 subscriptionId,
-        bytes32 gasLane,
-        uint256 baseFee,
-        uint32 gasLimit,
-        address vrfCoordinatorV2
-    ) VRFConsumerBaseV2Plus(vrfCoordinatorV2) {
+    constructor(uint256 subscriptionId, bytes32 gasLane, uint256 baseFee, uint32 gasLimit, address vrfCoordinatorV2)
+        VRFConsumerBaseV2Plus(vrfCoordinatorV2)
+        LotteryRoom(baseFee)
+    {
         i_subscriptionId = subscriptionId;
         i_gasLane = gasLane;
-        i_baseFee = baseFee;
         i_gasLimit = gasLimit;
     }
 
-    modifier checkBaseFee() {
-        if (msg.value != i_baseFee) {
-            revert LotteryAuction__IncorrectBaseFee();
-        }
-        _;
-    }
-
-    modifier checkRoomExists(uint256 roomId) {
-        if (s_roomIndex[roomId] == 0) {
-            revert LotteryAuction__RoomNotFound();
-        }
-        _;
-    }
-
-    function createRoom(uint256 interval) external payable checkBaseFee {
-        uint256 roomId = s_lastId;
-        LotteryRoom storage room = s_rooms[roomId];
-
-        room.state = LotteryState.AWAITING;
-        room.playerToBet[msg.sender] = msg.value;
-        room.lastTimestamp = block.timestamp;
-        room.playersCount = 1;
-        room.interval = interval;
-
-        s_roomsIds.push(roomId);
-        s_roomIndex[roomId] = s_roomsIds.length;
-        s_lastId++;
-
-        emit RoomCreated(roomId, msg.sender);
-    }
-
-    function enterRoom(uint256 roomId) external payable checkBaseFee checkRoomExists(roomId) {
-        LotteryRoom storage room = s_rooms[roomId];
-
-        if (room.playerToBet[msg.sender] != 0) {
-            revert LotteryAuction__CantJoinTwice();
-        }
-
-        if (room.state == LotteryState.AUCTION || room.state == LotteryState.CALCULATING) {
-            revert LotteryAuction__CantJoinNow();
-        }
-
-        room.playerToBet[msg.sender] = i_baseFee;
-
-        uint32 playersCount = room.playersCount + 1;
-        if (playersCount == 2) {
-            room.state = LotteryState.OPEN;
-            room.lastTimestamp = block.timestamp;
-        }
-
-        room.playersCount = playersCount;
-        emit RoomEntered(roomId, msg.sender);
-    }
-
-    function leaveRoom(uint256 roomId) external checkRoomExists(roomId) {
-        LotteryRoom storage room = s_rooms[roomId];
+    function fundAuction(uint256 roomId) external payable checkRoomExists(roomId) {
+        Room storage room = s_rooms[roomId];
 
         if (room.playerToBet[msg.sender] == 0) {
-            revert LotteryAuction__NotRoomMember();
+            revert LotteryRoom__NotRoomMember();
         }
 
         LotteryState state = room.state;
-        if (state == LotteryState.AUCTION || state == LotteryState.CALCULATING) {
-            revert LotteryAuction__CantLeaveRoomNow();
+        if (state != LotteryState.AUCTION) {
+            revert LotteryAuction__AuctionUnavailable();
         }
 
-        delete room.playerToBet[msg.sender];
-        emit RoomLeft(roomId, msg.sender);
+        room.playerToBet[msg.sender] += msg.value;
+        room.betsAmount += msg.value;
 
-        room.playersCount -= 1;
-        if (room.playersCount == 1) {
-            room.state = LotteryState.AWAITING;
-            emit RoomWentToAwaiting(roomId);
-        } else if (room.playersCount == 0) {
-            uint256 indexToDelete = s_roomIndex[roomId] - 1;
-            uint256 lastIndex = s_roomsIds.length - 1;
-            uint256 lastRoomId = s_roomsIds[lastIndex];
+        emit AuctionFunded(roomId, msg.sender);
+    }
 
-            if (indexToDelete != lastIndex) {
-                s_roomsIds[indexToDelete] = lastRoomId;
-                s_roomIndex[lastRoomId] = indexToDelete + 1;
+    function checkUpkeep(
+        bytes memory /* checkData */
+    )
+        external
+        view
+        override
+        returns (bool upkeepNeeded, bytes memory performData)
+    {
+        for (uint256 i = 0; i < s_roomsIds.length; ++i) {
+            uint256 roomId = s_roomsIds[i];
+            Room storage room = s_rooms[roomId];
+            if (_isUpkeepNeeded(room)) {
+                return (true, abi.encode(roomId));
             }
+        }
+        return (false, bytes(""));
+    }
 
-            s_roomsIds.pop();
-            delete s_roomIndex[roomId];
-            delete s_rooms[roomId];
+    function performUpkeep(bytes calldata performData) external override {
+        uint256 roomId = abi.decode(performData, (uint256));
 
-            emit RoomDeleted(roomId);
+        if (s_roomIndex[roomId] == 0) {
+            revert LotteryAuction__UpkeepNotNeeded();
         }
 
-        (bool success,) = msg.sender.call{value: i_baseFee}("");
-        if (!success) {
-            revert LotteryAuction__TransferFailed();
+        Room storage room = s_rooms[roomId];
+
+        if (!_isUpkeepNeeded(room)) {
+            revert LotteryAuction__UpkeepNotNeeded();
         }
+
+        if (room.state == LotteryState.OPEN) {
+            room.state = LotteryState.CALCULATING;
+        } else {
+            room.state = LotteryState.CALCULATING_AUCTION;
+        }
+
+        uint256 requestId = s_vrfCoordinator.requestRandomWords(
+            VRFV2PlusClient.RandomWordsRequest({
+                keyHash: i_gasLane,
+                subId: i_subscriptionId,
+                requestConfirmations: REQUEST_CONFIRMATIONS,
+                callbackGasLimit: i_gasLimit,
+                numWords: NUM_WORDS,
+                extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: false}))
+            })
+        );
+
+        s_requestToRoom[requestId] = roomId;
+    }
+
+    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal override {
+        uint256 roomId = s_requestToRoom[requestId];
+        delete s_requestToRoom[requestId];
+        Room storage room = s_rooms[roomId];
+
+        if (room.state == LotteryState.CALCULATING) {
+            _selectAuctionPlayers(room, randomWords[0]);
+            room.lastTimestamp = block.timestamp;
+            room.state = LotteryState.AUCTION;
+        } else if (room.state == LotteryState.CALCULATING_AUCTION) {
+            address payable winner = _selectWinner(room, randomWords[0]);
+            uint256 prize = room.betsAmount;
+
+            _deleteRoom(roomId);
+            emit LotteryAuctionEnded(roomId);
+
+            (bool success,) = winner.call{value: prize}("");
+            if (!success) {
+                revert LotteryAuction__TransferFailed();
+            }
+        }
+    }
+
+    function _isUpkeepNeeded(Room storage room) private view returns (bool) {
+        LotteryState state = room.state;
+        bool isOpen = (state == LotteryState.OPEN) || (state == LotteryState.AUCTION);
+        bool timePassed = ((block.timestamp - room.lastTimestamp) > room.interval);
+
+        return isOpen && timePassed;
+    }
+
+    function _selectAuctionPlayers(Room storage room, uint256 randomWord) private {
+        uint256 playersLength = room.playersAddr.length;
+        uint256 survivorsCount = playersLength / 2;
+
+        address payable[] memory shuffledPlayers = room.playersAddr;
+
+        for (uint256 i; i < survivorsCount; ++i) {
+            uint256 randomIndex = i + (uint256(keccak256(abi.encode(randomWord, i))) % (playersLength - i));
+            (shuffledPlayers[i], shuffledPlayers[randomIndex]) = (shuffledPlayers[randomIndex], shuffledPlayers[i]);
+        }
+
+        for (uint256 i = survivorsCount; i < playersLength; ++i) {
+            delete room.playerToBet[shuffledPlayers[i]];
+            delete room.playerIndex[shuffledPlayers[i]];
+        }
+
+        delete room.playersAddr;
+
+        for (uint256 i; i < survivorsCount; ++i) {
+            address payable survivor = shuffledPlayers[i];
+            room.playersAddr.push(survivor);
+            room.playerIndex[survivor] = i + 1;
+        }
+
+        room.playersCount = survivorsCount;
+    }
+
+    function _selectWinner(Room storage room, uint256 randomWord) private view returns (address payable) {
+        uint256 playersSum = 0;
+        for (uint256 i = 0; i < room.playersAddr.length; ++i) {
+            address playerAddr = room.playersAddr[i];
+            playersSum += room.playerToBet[playerAddr];
+        }
+
+        uint256 winnerNum = randomWord % playersSum;
+        uint256 curSum = 0;
+        address payable winner;
+
+        for (uint256 i = 0; i < room.playersAddr.length; ++i) {
+            address payable player = room.playersAddr[i];
+            curSum += room.playerToBet[player];
+
+            if (winnerNum < curSum) {
+                winner = player;
+                break;
+            }
+        }
+
+        return winner;
     }
 }
