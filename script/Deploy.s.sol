@@ -8,7 +8,7 @@ import {Config} from "./Config.s.sol";
 import {Subscription} from "./Subscriptions.s.sol";
 
 contract DeployScript is Script {
-    function run() external {
+    function run() external returns (LotteryAuction, Config) {
         Config config = new Config();
         Config.NetworkConfig memory networkConfig = config.getConfig();
         uint256 subId = networkConfig.subscriptionId;
@@ -34,5 +34,7 @@ contract DeployScript is Script {
         VRFCoordinatorV2_5Mock(networkConfig.vrfCoordinatorV2_5).addConsumer(subId, address(lotteryAuction));
 
         vm.stopBroadcast();
+
+        return (lotteryAuction, config);
     }
 }

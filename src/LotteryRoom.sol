@@ -7,7 +7,7 @@ contract LotteryRoom {
     error LotteryRoom__RoomNotFound(uint256 roomId);
     error LotteryRoom__TransferFailed();
     error LotteryRoom__NotRoomMember();
-    error LotteryRoom__CantJoinTwice();
+    error LotteryRoom__CantEnterRoomTwice();
     error LotteryRoom__RoomMustBeOpen(LotteryState state);
     error LotteryRoom__MaxPlayersInRoom(uint256 playersCount);
     error LotteryRoom__InvalidMaxPlayers(uint256 maxPlayers);
@@ -96,7 +96,7 @@ contract LotteryRoom {
         Room storage room = s_rooms[roomId];
 
         if (room.playerToBet[msg.sender] != 0) {
-            revert LotteryRoom__CantJoinTwice();
+            revert LotteryRoom__CantEnterRoomTwice();
         }
 
         if (room.state != LotteryState.OPEN && room.state != LotteryState.AWAITING) {
@@ -188,5 +188,21 @@ contract LotteryRoom {
 
         room.playersAddr.pop();
         delete room.playerIndex[player];
+    }
+
+    function getRoom(uint256 roomId)
+        external
+        view
+        checkRoomExists(roomId)
+        returns (LotteryState state, uint256 lastTimestamp, uint256 playersCount, uint256 interval, uint256 betsAmount)
+    {
+        Room storage room = s_rooms[roomId];
+
+        return (room.state, room.lastTimestamp, room.playersCount, room.interval, room.betsAmount);
+    }
+
+    function getPlayer(uint256 roomId, uint256 playerId) external view returns (address) {
+        Room storage room = s_rooms[roomId];
+        return room.playersAddr[playerId];
     }
 }
