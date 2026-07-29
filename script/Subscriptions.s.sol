@@ -4,10 +4,10 @@ pragma solidity ^0.8.35;
 import {Script} from "forge-std/Script.sol";
 import {Config, Constants} from "./Config.s.sol";
 import {VRFCoordinatorV2_5Mock} from "@chainlink/contracts/src/v0.8/vrf/mocks/VRFCoordinatorV2_5Mock.sol";
-import {LinkToken} from "../test/mocks/LinkToken.sol";
+import {LinkToken} from "./mocks/LinkToken.sol";
 
 contract Subscription is Constants, Script {
-    uint96 public constant FUND_AMOUNT = 1 ether;
+    uint96 public constant FUND_AMOUNT = 1000 ether;
 
     function createAndFund(uint256 subId, address vrfCoordinatorV2_5, address link, address account)
         public

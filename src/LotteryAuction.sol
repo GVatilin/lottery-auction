@@ -66,7 +66,7 @@ contract LotteryAuction is VRFConsumerBaseV2Plus, AutomationCompatibleInterface,
         uint256 roomId = abi.decode(performData, (uint256));
 
         if (s_roomIndex[roomId] == 0) {
-            revert LotteryAuction__UpkeepNotNeeded();
+            revert LotteryRoom__RoomNotFound(roomId);
         }
 
         Room storage room = s_rooms[roomId];
