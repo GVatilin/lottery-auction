@@ -9,8 +9,9 @@ abstract contract Constants {
     uint96 public constant MOCK_BASE_FEE = 0.25 ether;
     uint96 public constant MOCK_GAS_PRICE_LINK = 1e9;
     int256 public constant MOCK_WEI_PER_UINT_LINK = 4e15;
+    uint96 public constant LOCAL_FUND_AMOUNT = 1000 ether;
 
-    address public constant FOUNDRY_DEFAULT_SENDER = 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38;
+    address public constant ANVIL_DEFAULT_ACCOUNT = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
 
     uint256 public constant ETH_SEPOLIA_CHAIN_ID = 11155111;
     uint256 public constant ETH_MAINNET_CHAIN_ID = 1;
@@ -65,7 +66,7 @@ contract Config is Constants, Script {
 
     function _getSepoliaEthConfig() private pure returns (NetworkConfig memory sepoliaNetworkConfig) {
         sepoliaNetworkConfig = NetworkConfig({
-            subscriptionId: 0,
+            subscriptionId: 26912198976573989477324352710374316314624097627201015613115855833834261804666,
             gasLane: 0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae,
             baseFee: 0.02 ether,
             gasLimit: 700000,
@@ -94,7 +95,7 @@ contract Config is Constants, Script {
             gasLimit: 700000,
             vrfCoordinatorV2_5: address(vrfCoordinatorV2_5Mock),
             link: address(link),
-            account: FOUNDRY_DEFAULT_SENDER,
+            account: ANVIL_DEFAULT_ACCOUNT,
             maxPlayers: 50
         });
         vm.deal(localNetworkConfig.account, 100 ether);

@@ -1,49 +1,38 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.35;
 
-import {Script} from "forge-std/Script.sol";
-import {Config, Constants} from "./Config.s.sol";
+import {LotteryAuction} from "../src/LotteryAuction.sol";
 import {VRFCoordinatorV2_5Mock} from "@chainlink/contracts/src/v0.8/vrf/mocks/VRFCoordinatorV2_5Mock.sol";
-import {LinkToken} from "./mocks/LinkToken.sol";
 
-contract Subscription is Constants, Script {
-    uint96 public constant FUND_AMOUNT = 1000 ether;
+contract Subscription {
+    LotteryAuction private immutable i_lotteryAuction;
 
-    function createAndFund(uint256 subId, address vrfCoordinatorV2_5, address link, address account)
-        public
-        returns (uint256)
-    {
-        if (subId == 0) {
-            vm.startBroadcast(account);
-            subId = VRFCoordinatorV2_5Mock(vrfCoordinatorV2_5).createSubscription();
-            vm.stopBroadcast();
-        }
+    constructor(
+        address vrfCoordinatorV2_5,
+        bytes32 gasLane,
+        uint256 baseFee,
+        uint32 gasLimit,
+        uint256 maxPlayers,
+        uint96 fundAmount,
+        address finalOwner
+    ) {
+        uint256 subId = _createAndFund(vrfCoordinatorV2_5, fundAmount);
 
-        if (block.chainid == LOCAL_CHAIN_ID) {
-            vm.startBroadcast(account);
-            VRFCoordinatorV2_5Mock(vrfCoordinatorV2_5).fundSubscription(subId, FUND_AMOUNT);
-            vm.stopBroadcast();
-        } else {
-            vm.startBroadcast(account);
-            LinkToken(link).transferAndCall(vrfCoordinatorV2_5, FUND_AMOUNT, abi.encode(subId));
-            vm.stopBroadcast();
-        }
+        LotteryAuction auction = new LotteryAuction(subId, gasLane, baseFee, gasLimit, vrfCoordinatorV2_5, maxPlayers);
 
-        return subId;
+        VRFCoordinatorV2_5Mock(vrfCoordinatorV2_5).addConsumer(subId, address(auction));
+        auction.transferOwnership(finalOwner);
+
+        i_lotteryAuction = auction;
     }
 
-    function createAndFundUsingConfig() public returns (uint256 newSubId) {
-        Config config = new Config();
-        Config.NetworkConfig memory networkConfig = config.getConfig();
-        uint256 subId = networkConfig.subscriptionId;
-        address vrfCoordinatorV2_5 = networkConfig.vrfCoordinatorV2_5;
-        address link = networkConfig.link;
-        address account = networkConfig.account;
-
-        return createAndFund(subId, vrfCoordinatorV2_5, link, account);
+    function getLotteryAuction() external view returns (LotteryAuction) {
+        return i_lotteryAuction;
     }
 
-    function run() external {
-        createAndFundUsingConfig();
+    function _createAndFund(address vrfCoordinatorV2_5, uint96 fundAmount) private returns (uint256 subId) {
+        VRFCoordinatorV2_5Mock coordinator = VRFCoordinatorV2_5Mock(vrfCoordinatorV2_5);
+        subId = coordinator.createSubscription();
+        coordinator.fundSubscription(subId, fundAmount);
     }
 }
