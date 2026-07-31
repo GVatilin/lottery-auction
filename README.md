@@ -4,11 +4,13 @@ A decentralized lottery with multiple independent rooms, built with Solidity and
 
 ## Features
 
-- Multiple lottery rooms running independently
+- Create, join, and leave multiple lottery rooms running independently
 - Fixed entry fee and configurable room interval
 - Chainlink Automation-compatible upkeep
 - Chainlink VRF v2.5 randomness
 - Auction stage with weighted bets
+- Automatic local VRF subscription creation and funding
+- Local Anvil deployment and deployment to supported public EVM networks.
 - Unit and functional tests
 
 ## Requirements
