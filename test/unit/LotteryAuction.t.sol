@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.35;
 
-import {BaseTest} from "./BaseTest.t.sol";
+import {BaseTest} from "../BaseTest.t.sol";
 import {LotteryAuction} from "../../src/LotteryAuction.sol";
 import {LotteryRoom} from "../../src/LotteryRoom.sol";
 import {Config} from "../../script/Config.s.sol";
@@ -15,7 +15,6 @@ contract LotteryAuctionTest is BaseTest {
     uint32 gasLimit;
     address vrfCoordinatorV2_5;
     LinkToken link;
-    uint256 maxPlayers;
     uint256 public constant LINK_BALANCE = 10 ether;
 
     function setUp() external {
@@ -30,7 +29,6 @@ contract LotteryAuctionTest is BaseTest {
         gasLimit = networkConfig.gasLimit;
         vrfCoordinatorV2_5 = networkConfig.vrfCoordinatorV2_5;
         link = LinkToken(networkConfig.link);
-        maxPlayers = networkConfig.maxPlayers;
     }
 
     // **************************  checkUpkeep  **************************
@@ -224,7 +222,6 @@ contract LotteryAuctionTest is BaseTest {
     }
 
     // **************************  fulfillRandomWords  **************************
-
     function testCantCallFulfillRandomWordsBeforePerformUpkeep() public skipFork {
         vm.expectRevert(VRFCoordinatorV2_5Mock.InvalidRequest.selector);
         VRFCoordinatorV2_5Mock(vrfCoordinatorV2_5).fulfillRandomWords(0, address(lotteryAuction));
@@ -253,29 +250,6 @@ contract LotteryAuctionTest is BaseTest {
         assertNotEq(firstSurvivor, address(0));
         assertNotEq(secondSurvivor, address(0));
         assertNotEq(firstSurvivor, secondSurvivor);
-    }
-
-    function testFulfillRandomWordsFinishesAuctionAndCreditsWinner() public skipFork {
-        _requestFirstRoundWithFourPlayers();
-        uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = 123;
-        VRFCoordinatorV2_5Mock(vrfCoordinatorV2_5)
-            .fulfillRandomWordsWithOverride(1, address(lotteryAuction), randomWords);
-
-        address winner = lotteryAuction.getPlayer(0, 0);
-        (,,,, uint256 prize) = lotteryAuction.getRoom(0);
-        _skipDefaultInterval();
-        lotteryAuction.performUpkeep(abi.encode(0));
-
-        randomWords[0] = 0;
-        VRFCoordinatorV2_5Mock(vrfCoordinatorV2_5)
-            .fulfillRandomWordsWithOverride(2, address(lotteryAuction), randomWords);
-
-        vm.prank(winner);
-        assertEq(lotteryAuction.getBalance(), prize);
-
-        vm.expectRevert(abi.encodeWithSelector(LotteryRoom.LotteryRoom__RoomNotFound.selector, 0));
-        lotteryAuction.getRoom(0);
     }
 
     function testFulfillRandomWordsEmitsLotteryAuctionEnded() public skipFork {

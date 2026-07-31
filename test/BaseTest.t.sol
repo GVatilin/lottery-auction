@@ -1,9 +1,9 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.35;
 
 import {Test} from "forge-std/Test.sol";
-import {LotteryAuction} from "../../src/LotteryAuction.sol";
-import {Config} from "../../script/Config.s.sol";
+import {LotteryAuction} from "../src/LotteryAuction.sol";
+import {Config} from "../script/Config.s.sol";
 
 abstract contract BaseTest is Test {
     LotteryAuction internal lotteryAuction;
@@ -11,7 +11,7 @@ abstract contract BaseTest is Test {
 
     address internal PLAYER = makeAddr("player");
 
-    uint256 internal baseFee;
+    uint256 baseFee;
     uint256 internal constant DEFAULT_INTERVAL = 60;
     uint256 internal constant STARTING_USER_BALANCE = 5 ether;
 
