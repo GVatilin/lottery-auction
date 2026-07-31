@@ -54,11 +54,11 @@ contract Config is Constants, Script {
         mainnetNetworkConfig = NetworkConfig({
             subscriptionId: 0,
             gasLane: 0x9fe0eebf5e446e3c998ec9bb19951541aee00bb90ea201ae456421a2ded86805,
-            baseFee: 0.01 ether,
-            gasLimit: 500000,
+            baseFee: 0.02 ether,
+            gasLimit: 700000,
             vrfCoordinatorV2_5: 0x271682DEB8C4E0901D1a1550aD2e64D568E69909,
             link: 0x514910771AF9Ca656af840dff83E8264EcF986CA,
-            account: 0x643315C9Be056cDEA171F4e7b2222a4ddaB9F88D,
+            account: 0xb1fD4e149b9d1261DdF9b27071f7bEf76230720E,
             maxPlayers: 50
         });
     }
@@ -67,11 +67,11 @@ contract Config is Constants, Script {
         sepoliaNetworkConfig = NetworkConfig({
             subscriptionId: 0,
             gasLane: 0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae,
-            baseFee: 0.01 ether,
-            gasLimit: 500000,
+            baseFee: 0.02 ether,
+            gasLimit: 700000,
             vrfCoordinatorV2_5: 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B,
             link: 0x779877A7B0D9E8603169DdbD7836e478b4624789,
-            account: 0x643315C9Be056cDEA171F4e7b2222a4ddaB9F88D,
+            account: 0xb1fD4e149b9d1261DdF9b27071f7bEf76230720E,
             maxPlayers: 50
         });
     }
@@ -90,8 +90,8 @@ contract Config is Constants, Script {
         localNetworkConfig = NetworkConfig({
             subscriptionId: 0,
             gasLane: 0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c,
-            baseFee: 0.01 ether,
-            gasLimit: 500000,
+            baseFee: 0.02 ether,
+            gasLimit: 700000,
             vrfCoordinatorV2_5: address(vrfCoordinatorV2_5Mock),
             link: address(link),
             account: FOUNDRY_DEFAULT_SENDER,
