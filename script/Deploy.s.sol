@@ -42,7 +42,10 @@ contract DeployScript is Constants, Script {
         return (lotteryAuction, config);
     }
 
-    function _createAndFundLocalLotteryAuction(Config.NetworkConfig memory networkConfig) private returns (LotteryAuction) {
+    function _createAndFundLocalLotteryAuction(Config.NetworkConfig memory networkConfig)
+        private
+        returns (LotteryAuction)
+    {
         vm.startBroadcast(networkConfig.account);
 
         Subscription subscription = new Subscription(

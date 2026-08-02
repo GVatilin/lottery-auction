@@ -10,7 +10,7 @@ import {DeployScript} from "../../script/Deploy.s.sol";
 
 contract LotteryRoomTest is BaseTest {
     uint256 maxPlayers;
-    
+
     function setUp() external {
         DeployScript deployer = new DeployScript();
         (lotteryAuction, config) = deployer.run();
